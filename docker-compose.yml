@@ -1,0 +1,123 @@
+version: "3.9"
+
+networks:
+  fee_network:
+    driver: bridge
+
+volumes:
+  mysql_data:
+  model_data:
+
+services:
+  # ─── MySQL 8 ────────────────────────────────────────────────────────────────
+  db:
+    image: mysql:8.0
+    container_name: fee_db
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql
+    networks:
+      - fee_network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ─── Redis 7 ────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: fee_redis
+    restart: unless-stopped
+    networks:
+      - fee_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ─── Flask REST API ──────────────────────────────────────────────────────────
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: fee_api
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    ports:
+      - "5000:5000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fee_network
+
+  # ─── Celery Worker ───────────────────────────────────────────────────────────
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: fee_worker
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fee_network
+    command: celery -A celery_worker.celery worker --loglevel=info
+
+  # ─── Celery Beat Scheduler ───────────────────────────────────────────────────
+  beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: fee_beat
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - fee_network
+    command: celery -A celery_worker.celery beat --loglevel=info
+
+  # ─── AI/ML Risk Scoring Service ──────────────────────────────────────────────
+  risk_service:
+    build:
+      context: ./risk_service
+      dockerfile: Dockerfile
+    container_name: fee_risk_service
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_URL: ${DATABASE_URL}
+      DATABASE_URL: ${DATABASE_URL}
+      MODEL_DIR: /app/models
+      RISK_SERVICE_PORT: 5001
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - fee_network
+    volumes:
+      - model_data:/app/models

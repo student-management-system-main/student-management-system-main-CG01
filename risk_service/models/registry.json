@@ -1,0 +1,9 @@
+{
+  "active_lr": "./models/model_lr_v1.0.0.joblib",
+  "active_dt": "./models/model_dt_v1.0.0.joblib",
+  "version": "v1.0.0",
+  "active_scaler": "./models/scaler_v1.0.0.joblib",
+  "current_roc_auc": 0.8795551466694906,
+  "trained_at": "2026-06-03T15:33:38.158230Z",
+  "n_samples": 562
+}
