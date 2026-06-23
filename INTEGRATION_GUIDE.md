@@ -1,6 +1,6 @@
 # Student Management System - Complete Integration Guide
 
-## System Overview
+## System overview
 
 This is a fully integrated student fee management system with machine learning-based risk scoring, built with:
 - **Backend**: Flask REST API (Python)
